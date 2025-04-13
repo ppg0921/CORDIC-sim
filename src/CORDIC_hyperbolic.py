@@ -40,9 +40,12 @@ def cordic_hyperbolic_rotation(z_input, iterations=16, approximate=False, total_
         d = 1 if z >= 0 else -1
         pow2_i = 2 ** -i
         if not approximate:
-            x_new = x + d * y * pow2_i
-            y_new = y + d * x * pow2_i
-            z -= d * e_i
+            dx = utils.quantize_to_fixed_point(x=d*x, total_bits=total_bits, frac_bits=frac_bits)
+            dy = utils.quantize_to_fixed_point(x=d*y, total_bits=total_bits, frac_bits=frac_bits)
+            dei = utils.quantize_to_fixed_point(x=-d*e_i, total_bits=total_bits, frac_bits=frac_bits)
+            # x_new = x + d * y * pow2_i
+            # y_new = y + d * x * pow2_i
+            # z -= d * e_i
         else:
             if d == -1:
                 dx = utils.fixed_point_negation(x, total_bits=total_bits, frac_bits=frac_bits)[0]
@@ -52,11 +55,11 @@ def cordic_hyperbolic_rotation(z_input, iterations=16, approximate=False, total_
                 dx = x
                 dy = y
                 dei = utils.fixed_point_negation(e_i, total_bits=total_bits, frac_bits=frac_bits)[0]
-            x_shifted = utils.fixed_point_signed_right_shift(x=dx, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
-            y_shifted = utils.fixed_point_signed_right_shift(x=dy, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
-            x_new = utils.fixed_point_add(x, y_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
-            y_new = utils.fixed_point_add(y, x_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
-            z = utils.fixed_point_add(z, dei, total_bits=total_bits, frac_bits=frac_bits)[0]
+        x_shifted = utils.fixed_point_signed_right_shift(x=dx, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
+        y_shifted = utils.fixed_point_signed_right_shift(x=dy, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
+        x_new = utils.fixed_point_add(x, y_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
+        y_new = utils.fixed_point_add(y, x_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
+        z = utils.fixed_point_add(z, dei, total_bits=total_bits, frac_bits=frac_bits)[0]
             
                 
         x, y = x_new, y_new
@@ -70,11 +73,17 @@ iteration = 16
 approximate = True
 total_bits = 16
 frac_bits = 13
+comparted_to_no_approx = True
 
 for z in z_vals:
     x_final, y_final = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=approximate, total_bits=total_bits, frac_bits=frac_bits)
     cordic_output = x_final + y_final
     expected = math.exp(z)
+    if comparted_to_no_approx:
+        # Compare with no approximation
+        x_final_no_approx, y_final_no_approx = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=False, total_bits=total_bits, frac_bits=frac_bits)
+        cordic_output_no_approx = x_final_no_approx + y_final_no_approx
+        expected = cordic_output_no_approx
     rel_error = abs(cordic_output - expected) / expected * 100
     relative_errors.append(rel_error)
 
@@ -87,7 +96,7 @@ plt.title('CORDIC Hyperbolic Rotation Mode: Relative Error vs z')
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"../result/cordic_hyperbolic_rotation_{iteration}_{'approximate' if approximate else ''}.png", dpi=300)  # You can change filename or dpi as needed
+plt.savefig(f"../result/cordic_hyperbolic_rotation_hardware_{iteration}_{'approximate' if approximate else ''}_{'compared_to_no_approx' if comparted_to_no_approx else ''}.png", dpi=300)  # You can change filename or dpi as needed
 plt.show()
 # Input value
 # z_val = 0.9
