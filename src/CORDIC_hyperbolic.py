@@ -1,8 +1,9 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import utils
 
-def cordic_hyperbolic_rotation(z_input, iterations=20):
+def cordic_hyperbolic_rotation(z_input, iterations=20, approximate=False):
     # Initial values
     x = 1.207497068
     y = 0.0
@@ -27,6 +28,8 @@ def cordic_hyperbolic_rotation(z_input, iterations=20):
             K *= (1 - 2 ** (-2 * i)) ** -0.5
             count += 1
         i += 1
+        # print(f"i={i}, e_i={e_i:.6f}")
+    
 
     # K_inv = 1 / K
     # x *= K_inv
@@ -36,9 +39,24 @@ def cordic_hyperbolic_rotation(z_input, iterations=20):
     for i, e_i in atanhs:
         d = 1 if z >= 0 else -1
         pow2_i = 2 ** -i
-        x_new = x + d * y * pow2_i
-        y_new = y + d * x * pow2_i
-        z -= d * e_i
+        if not approximate:
+            x_new = x + d * y * pow2_i
+            y_new = y + d * x * pow2_i
+            z -= d * e_i
+        else:
+            if d == -1:
+                dx, _ = utils.fixed_point_negation(x, total_bits=16, int_bits=2, frac_bits=13)
+                dy, _ = utils.fixed_point_negation(y, total_bits=16, int_bits=2, frac_bits=13)
+                dei = e_i
+            else:
+                dx = x
+                dy = y
+                dei, _ = utils.fixed_point_negation(e_i, total_bits=16, int_bits=2, frac_bits=13)
+            x_new = x + dx * pow2_i
+            y_new = y + dy * pow2_i
+            z += dei
+            
+                
         x, y = x_new, y_new
 
     return x, y
@@ -46,9 +64,11 @@ def cordic_hyperbolic_rotation(z_input, iterations=20):
 
 z_vals = np.linspace(0, 1.0, 100)
 relative_errors = []
+iteration = 16
+approximate = True
 
 for z in z_vals:
-    x_final, y_final = cordic_hyperbolic_rotation(z, iterations=8)
+    x_final, y_final = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=approximate)
     cordic_output = x_final + y_final
     expected = math.exp(z)
     rel_error = abs(cordic_output - expected) / expected * 100
@@ -63,7 +83,7 @@ plt.title('CORDIC Hyperbolic Rotation Mode: Relative Error vs z')
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-plt.savefig("../result/cordic_hyperbolic_rotation.png", dpi=300)  # You can change filename or dpi as needed
+plt.savefig(f"../result/cordic_hyperbolic_rotation_{iteration}_{'approximate' if approximate else ''}.png", dpi=300)  # You can change filename or dpi as needed
 plt.show()
 # Input value
 # z_val = 0.9
