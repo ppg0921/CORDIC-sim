@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import utils
 
-def cordic_hyperbolic_rotation(z_input, iterations=20, approximate=False):
+def cordic_hyperbolic_rotation(z_input, iterations=16, approximate=False, total_bits=16, frac_bits=13):
     # Initial values
-    x = 1.207497068
+    x = utils.quantize_to_fixed_point(1.207497068, total_bits=total_bits, frac_bits=frac_bits)  # 1/K' = 1.207497068
     y = 0.0
     z = z_input
 
@@ -17,7 +17,7 @@ def cordic_hyperbolic_rotation(z_input, iterations=20, approximate=False):
     repeat_set = {4, 13}
 
     while count < iterations:
-        e_i = math.atanh(2 ** -i)
+        e_i = utils.quantize_to_fixed_point(math.atanh(2 ** -i), total_bits=total_bits, frac_bits=frac_bits)
         if i in repeat_set:
             atanhs.append((i, e_i))
             atanhs.append((i, e_i))  # repeat once
@@ -45,16 +45,18 @@ def cordic_hyperbolic_rotation(z_input, iterations=20, approximate=False):
             z -= d * e_i
         else:
             if d == -1:
-                dx, _ = utils.fixed_point_negation(x, total_bits=16, int_bits=2, frac_bits=13)
-                dy, _ = utils.fixed_point_negation(y, total_bits=16, int_bits=2, frac_bits=13)
+                dx = utils.fixed_point_negation(x, total_bits=total_bits, frac_bits=frac_bits)[0]
+                dy = utils.fixed_point_negation(y, total_bits=total_bits, frac_bits=frac_bits)[0]
                 dei = e_i
             else:
                 dx = x
                 dy = y
-                dei, _ = utils.fixed_point_negation(e_i, total_bits=16, int_bits=2, frac_bits=13)
-            x_new = x + dx * pow2_i
-            y_new = y + dy * pow2_i
-            z += dei
+                dei = utils.fixed_point_negation(e_i, total_bits=total_bits, frac_bits=frac_bits)[0]
+            x_shifted = utils.fixed_point_signed_right_shift(x=dx, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
+            y_shifted = utils.fixed_point_signed_right_shift(x=dy, shift=i, total_bits=total_bits, frac_bits=frac_bits)[0]
+            x_new = utils.fixed_point_add(x, y_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
+            y_new = utils.fixed_point_add(y, x_shifted, total_bits=total_bits, frac_bits=frac_bits)[0]
+            z = utils.fixed_point_add(z, dei, total_bits=total_bits, frac_bits=frac_bits)[0]
             
                 
         x, y = x_new, y_new
@@ -66,9 +68,11 @@ z_vals = np.linspace(0, 1.0, 100)
 relative_errors = []
 iteration = 16
 approximate = True
+total_bits = 16
+frac_bits = 13
 
 for z in z_vals:
-    x_final, y_final = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=approximate)
+    x_final, y_final = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=approximate, total_bits=total_bits, frac_bits=frac_bits)
     cordic_output = x_final + y_final
     expected = math.exp(z)
     rel_error = abs(cordic_output - expected) / expected * 100

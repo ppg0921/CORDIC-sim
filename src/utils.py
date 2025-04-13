@@ -1,35 +1,57 @@
-def fixed_point_negation(x, total_bits=16, int_bits=2, frac_bits=13):
-  # Step 1: Compute scale
-  scale = 1 << frac_bits  # = 2^frac_bits
+def fixed_point_negation(x, total_bits=16, frac_bits=13, output_bits=None, output_frac_bits=None):
+    # Step 1: Compute scale
+    if output_bits is None or output_frac_bits is None:
+        output_bits = total_bits
+        output_frac_bits = frac_bits
+    scale = 1 << frac_bits
 
-  # Step 2: Convert float to fixed-point signed integer
-  fixed = int(round(x * scale))
+    # Step 2: Convert float to fixed-point signed integer
+    fixed = int(round(x * scale))
 
-  # Step 3: Ensure value fits in two's complement
-  max_val = (1 << (total_bits - 1)) - 1
-  min_val = -1 << (total_bits - 1)
-  if fixed > max_val or fixed < min_val:
-      raise ValueError(f"Value {x} out of range for {total_bits}-bit fixed-point")
+    # Step 3: Ensure value fits in two's complement
+    max_val = (1 << (total_bits - 1)) - 1
+    min_val = -1 << (total_bits - 1)
+    if fixed > max_val or fixed < min_val:
+        raise ValueError(f"Value {x} out of range for {total_bits}-bit fixed-point")
 
-  # Step 4: Convert to unsigned 8-bit representation (two's complement)
-  mask = (1 << total_bits) - 1
-  fixed_unsigned = fixed & mask
+    # Step 4: Convert to unsigned total_bits-bit two's complement
+    mask = (1 << total_bits) - 1
+    fixed_unsigned = fixed & mask
 
-  # Step 5: Bitwise negation
-  negated = ~fixed_unsigned & mask
+    # Step 5: Bitwise negation
+    negated = ~fixed_unsigned & mask
 
-  # Step 6: Convert back to signed integer
-  if negated & (1 << (total_bits - 1)):
-      signed = negated - (1 << total_bits)
-  else:
-      signed = negated
+    # Step 6: Convert back to signed integer
+    if negated & (1 << (total_bits - 1)):
+        signed = negated - (1 << total_bits)
+    else:
+        signed = negated
 
-  # Step 7: Convert back to float
-  result = signed / scale
-  return result, (format(fixed_unsigned, '08b'), format(negated, '08b'))
+    # Step 7: Convert back to float
+    result = signed / scale
 
-def fixed_point_add(x, y, total_bits=16, int_bits=2, frac_bits=13):
-    scale = 1 << frac_bits  # Scaling factor: 2^frac_bits
+    # Step 8: Quantize to output format
+    out_scale = 1 << output_frac_bits
+    quantized_int = int(round(result * out_scale))
+
+    # Clip to representable range
+    output_int_bits = output_bits - 1 - output_frac_bits
+    out_min = -1 << output_int_bits
+    out_max = (1 << output_int_bits) - 1
+    quantized_int = max(out_min * out_scale, min(out_max * out_scale, quantized_int))
+
+    # Final quantized float and binary
+    quantized_float = quantized_int / out_scale
+    quantized_binary = format(quantized_int & ((1 << output_bits) - 1), f'0{output_bits}b')
+
+    return quantized_float, (format(fixed_unsigned, f'0{total_bits}b'), format(negated, f'0{total_bits}b')), quantized_binary
+
+
+def fixed_point_add(x, y, total_bits=16, frac_bits=13, output_bits=None, output_frac_bits=None):
+    if output_bits is None or output_frac_bits is None:
+        output_bits = total_bits
+        output_frac_bits = frac_bits
+    scale = 1 << frac_bits
     max_val = (1 << (total_bits - 1)) - 1
     min_val = -1 << (total_bits - 1)
 
@@ -40,18 +62,33 @@ def fixed_point_add(x, y, total_bits=16, int_bits=2, frac_bits=13):
     # Perform fixed-point addition
     result_fixed = x_fixed + y_fixed
 
-    # Saturate if out of range
+    # Saturate to fixed-point input range
     result_fixed = max(min_val, min(max_val, result_fixed))
 
     # Convert back to float
     result_float = result_fixed / scale
 
-    # Format binary output
-    result_binary = format(result_fixed & ((1 << total_bits) - 1), f'0{total_bits}b')
+    # Quantize result to output format
+    out_scale = 1 << output_frac_bits
+    quantized_int = int(round(result_float * out_scale))
 
-    return result_float, result_fixed, result_binary
+    # Saturate to output range
+    output_int_bits = output_bits - 1 - output_frac_bits
+    out_min = -1 << output_int_bits
+    out_max = (1 << output_int_bits) - 1
+    quantized_int = max(out_min * out_scale, min(out_max * out_scale, quantized_int))
 
-def fixed_point_signed_right_shift(x, shift, total_bits=16, frac_bits=13, output_bits=16, output_frac_bits=13):
+    # Final quantized float and binary representation
+    quantized_float = quantized_int / out_scale
+    quantized_binary = format(quantized_int & ((1 << output_bits) - 1), f'0{output_bits}b')
+
+    return quantized_float, quantized_int, quantized_binary
+
+
+def fixed_point_signed_right_shift(x, shift, total_bits=16, frac_bits=13, output_bits=None, output_frac_bits=None):
+    if output_bits is None or output_frac_bits is None:
+        output_bits = total_bits
+        output_frac_bits = frac_bits
     scale = 1 << frac_bits
     out_scale = 1 << output_frac_bits
 
@@ -85,24 +122,44 @@ def fixed_point_signed_right_shift(x, shift, total_bits=16, frac_bits=13, output
 
     return final_float, quantized, final_binary
 
+def quantize_to_fixed_point(x, total_bits=16, frac_bits=13):
+    int_bits = total_bits - 1 - frac_bits  # 1 sign bit
+
+    # Calculate scaling factor
+    scale = 1 << frac_bits
+
+    # Fixed-point value (rounded)
+    fixed_val = int(round(x * scale))
+
+    # Get representable range
+    min_val = - (1 << (int_bits))
+    max_val = (1 << (int_bits)) - (1 / scale)
+
+    # Clip to range (in float)
+    x_clipped = max(min(x, max_val), min_val)
+
+    # Re-quantize after clipping
+    quantized = round(x_clipped * scale) / scale
+
+    return quantized
 
 
 
 
-def test_negation(total_bits=16, int_bits=2, frac_bits=13):
-  x = 1.625  # Represented as 00011010 (approx.)
-  neg_val, orig_bin, neg_bin = fixed_point_negation(x, total_bits=total_bits, int_bits=int_bits, frac_bits=frac_bits)
+def test_negation(total_bits=16, frac_bits=13):
+  x = 1.6746  # Represented as 00011010 (approx.)
+  neg_val, orig_bin, neg_bin = fixed_point_negation(x, total_bits=total_bits, frac_bits=frac_bits)
 
   print(f"Original x: {x}")
   print(f"Fixed-point binary: {orig_bin}")
   print(f"Negated binary:     {neg_bin}")
   print(f"Bitwise negation result (float): {neg_val}")
 
-def test_addition(total_bits=16, int_bits=2, frac_bits=13):
+def test_addition(total_bits=16, frac_bits=13, output_bits=16, output_frac_bits=13):
   x = 1.00387
-  y = -0.08763
+  y = -0.38763
   true_result = x + y
-  result_float, result_fixed, result_binary = fixed_point_add(x, y, total_bits=total_bits, int_bits=int_bits, frac_bits=frac_bits)
+  result_float, result_fixed, result_binary = fixed_point_add(x, y, total_bits=total_bits, frac_bits=frac_bits)
   relative_error = abs((result_float - true_result) / true_result) * 100
   print(f"Original x: {x}")
   print(f"Original y: {y}")
@@ -130,9 +187,14 @@ def test_shift():
   # print(f"Quantized raw int: {raw}")
   # print(f"Binary (8-bit): {binary}")
   
-
+def test_quantization():
+  x = -1.6184
+  quantized = quantize_to_fixed_point(x, total_bits=8, frac_bits=5)
+  print(f"Original x: {x}")
+  print(f"Quantized to 8-bit fixed point (5 fractional bits): {quantized}")
 
 if __name__ == "__main__":
-  # test_addition(total_bits=8, int_bits=2, frac_bits=5)
-  test_shift()
+  test_addition(total_bits=16, frac_bits=13)
+  # test_shift()
+  # test_quantization()
   
