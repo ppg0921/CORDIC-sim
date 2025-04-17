@@ -18,6 +18,7 @@ Input limits:
   - For maximum precision, set num_iters ≤ 53 (double-precision mantissa bits).
 """
 import utils
+import matplotlib.pyplot as plt
 
 
 def cordic_division(x_init, y_init, num_iters, total_bits=16, frac_bits=13, approximate=False):
@@ -73,19 +74,38 @@ def main():
     total_bits = 16
     frac_bits = 11
     compared_to_no_approx = True
+    approximate = True
     
     ideal = y_init / x_init
     if compared_to_no_approx:
       # Compare with non-approximate version
       ideal = cordic_division(x_init=x_init, y_init=y_init, num_iters=num_iters, approximate=False, total_bits=total_bits, frac_bits=frac_bits)
 
-    z_approx = cordic_division(x_init=x_init, y_init=y_init, num_iters=num_iters, approximate=True, total_bits=total_bits, frac_bits=frac_bits)
+    z_approx = cordic_division(x_init=x_init, y_init=y_init, num_iters=num_iters, approximate=approximate, total_bits=total_bits, frac_bits=frac_bits)
     rel_error = (z_approx - ideal) / ideal * 100
 
     print(f"Approximate y/x    = {z_approx}")
     print(f"Ideal y/x          = {ideal}")
     print(f"Relative error     = {rel_error:.4f}%")
-
+    
+    xs = [i / 100 for i in range(60, 201)]
+    errors = []
+    y_fixed = 1.0
+    for x in xs:
+      ideal = y_fixed / x
+      z_approx = cordic_division(x_init=x, y_init=y_fixed, num_iters=num_iters, approximate=approximate, total_bits=total_bits, frac_bits=frac_bits)
+      rel_error = abs((z_approx - ideal) / ideal) * 100
+      errors.append(rel_error)
+    
+    plt.figure()
+    plt.plot(xs, errors)
+    plt.xlabel('x value')
+    plt.ylabel('Absolute relative error (%)')
+    plt.title('CORDIC Absolute Relative Error vs x (y=1)')
+    plt.grid(True)
+    plt.savefig(f"../result/cordic_division_hardware_{num_iters}{'_approximate' if approximate else ''}{'_compared_to_no_approx' if compared_to_no_approx else ''}.png", dpi=300)
+    plt.show()
+      
 
 if __name__ == '__main__':
     main()
