@@ -69,11 +69,11 @@ def cordic_hyperbolic_rotation(z_input, iterations=16, approximate=False, total_
 
 z_vals = np.linspace(0, 1.0, 100)
 relative_errors = []
-iteration = 16
-approximate = True
-total_bits = 16
-frac_bits = 13
-comparted_to_no_approx = True
+iteration = 8
+approximate = False
+total_bits = 8
+frac_bits = 5
+comparted_to_no_approx = False
 
 for z in z_vals:
     x_final, y_final = cordic_hyperbolic_rotation(z, iterations=iteration, approximate=approximate, total_bits=total_bits, frac_bits=frac_bits)

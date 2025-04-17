@@ -187,14 +187,14 @@ def test_shift():
   # print(f"Quantized raw int: {raw}")
   # print(f"Binary (8-bit): {binary}")
   
-def test_quantization():
-  x = -1.6184
-  quantized = quantize_to_fixed_point(x, total_bits=8, frac_bits=5)
+def test_quantization(total_bits=8, frac_bits=5):
+  x = -1.11456876
+  quantized = quantize_to_fixed_point(x, total_bits=total_bits, frac_bits=frac_bits)
   print(f"Original x: {x}")
   print(f"Quantized to 8-bit fixed point (5 fractional bits): {quantized}")
 
 if __name__ == "__main__":
-  test_addition(total_bits=16, frac_bits=13)
+#   test_addition(total_bits=16, frac_bits=13)
   # test_shift()
-  # test_quantization()
+  test_quantization(total_bits=8, frac_bits=5)
   
